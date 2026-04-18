@@ -112,6 +112,12 @@
      "vscode"
    ]
   },
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/introduction"
+    }
+  ],
   "footer": {
     "socials": {
       "x": "https://x.com/mintlify",
