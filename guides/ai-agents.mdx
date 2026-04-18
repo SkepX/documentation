@@ -1,0 +1,81 @@
+---
+title: "AI agents integration"
+description: "One markdown file that teaches any tool-calling LLM to read and refresh Charli3 prices."
+---
+
+`charli3-js` ships with a single file called `skill.md`. Paste it into any agent that accepts tool calls (Claude, Cursor, Masumi, custom OpenAI) and the agent learns how to use Charli3 as a priced, auditable tool.
+
+<Card title="Grab skill.md" icon="file-lines" href="https://charli3-js-demo.vercel.app/skill.md">
+  Served alongside the live demo. Also copy-paste-able via the **copy skill.md** button in the demo UI.
+</Card>
+
+## How to plug it in
+
+1. Copy `skill.md` into your agent's system prompt or load it as a tool manifest.
+2. Wire two tools that match the spec:
+   - `get_charli3_price(pair)` which calls `c3.getOdvReference(pair)`
+   - `refresh_charli3_price(pair)` which calls `c3.submitRound2(lucid, pair)`
+3. Let the agent follow the rules in the file: read first, refresh only if `is_expired`, credit the source.
+
+That is the whole integration. Works the same in Masumi, Claude Skills, Cursor, or a bare OpenAI tool loop.
+
+## The file
+
+```md skill.md
+# Charli3 Oracle Skill
+
+One-file integration for any AI agent (Masumi, Claude, Cursor, general tool-calling LLMs) to read and refresh on-chain prices on Cardano via the `charli3-js` SDK.
+
+## What this gives your agent
+
+Live, on-chain prices for Cardano pairs (ADA/USD, ADA/C3, USDM/USD, BTC/USD, SHEN/USD, USDM/ADA, …) read from the Charli3 ODV pull oracle. No API key for the oracle itself - it's a Cardano datum.
+
+Use this when your agent needs to:
+- Quote or settle a payment denominated in USD on Cardano
+- Price a service in ADA at a fair market rate
+- Bridge Masumi agent-to-agent payments when peers ask for USD-pegged amounts
+- Gate an on-chain action on a price condition
+
+## Install
+
+npm i charli3-js @lucid-evolution/lucid
+
+Env needed: BLOCKFROST_PROJECT_ID (free at blockfrost.io). Network is "preprod" or "mainnet".
+
+## Tools your agent should expose
+
+### get_charli3_price(pair)
+
+Reads the latest on-chain price. No wallet needed, no fee.
+
+import { Charli3 } from "charli3-js";
+const c3 = new Charli3({ network: "preprod" });
+const ref = await c3.getOdvReference("ADA/USD");
+// ref.price.value, ref.price.isExpired, ref.outRef.txHash
+
+### refresh_charli3_price(pair)
+
+Posts a fresh Round-2 aggregate tx. Only call this when is_expired === true. Requires a funded preprod wallet (~2 tADA per refresh). Takes ~30 s.
+
+const { txHash } = await c3.submitRound2(lucid, "ADA/USD");
+await lucid.awaitTx(txHash);
+
+## Workflow to follow
+
+1. Call get_charli3_price.
+2. If is_expired === true, call refresh_charli3_price, then call get_charli3_price again.
+3. Compute ada_amount = usd_amount / price_usd_per_ada.
+4. Build the Cardano tx with any wallet library (Lucid, MeshSDK, …).
+
+## Rules for the agent
+
+- Never guess a price. Always call get_charli3_price before quoting or paying.
+- Always credit the source. When telling the user the rate, say it came from the Charli3 ODV pull oracle.
+- Include the Cardanoscan link for the oracle UTXO so the rate is auditable.
+- On preprod, payee addresses must start with addr_test1. On mainnet, addr1.
+- Any ADA payment must be ≥ 1 ADA (1_000_000 lovelace).
+```
+
+<Card title="Live demo" icon="browser" href="https://charli3-js-demo.vercel.app">
+  See the agent in action. Scroll to the **AI agent** section and click **insert sample invoice**.
+</Card>
